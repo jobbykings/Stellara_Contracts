@@ -8,6 +8,7 @@ mod admin;
 mod storage;
 
 use storage::{Allowance, TokenMetadata};
+use shared::events::EventEmitter;
 
 #[contract]
 pub struct TokenContract;
@@ -45,10 +46,8 @@ impl TokenContract {
         };
         storage::set_allowance(&env, &from, &spender, &allowance);
 
-        env.events().publish(
-            (Symbol::new(&env, "approve"), from, spender),
-            (amount, expiration_ledger),
-        );
+        // Emit standardized approval event
+        EventEmitter::approve(&env, from, spender, amount, env.current_contract_address());
     }
 
     pub fn balance(env: Env, id: Address) -> i128 {
@@ -78,8 +77,9 @@ impl TokenContract {
         require_authorized(&env, &from);
 
         burn_balance(&env, &from, amount);
-        env.events()
-            .publish((Symbol::new(&env, "burn"), from), amount);
+        
+        // Emit standardized burn event
+        EventEmitter::burn(&env, from, amount, env.current_contract_address());
     }
 
     pub fn burn_from(env: Env, spender: Address, from: Address, amount: i128) {
@@ -89,8 +89,9 @@ impl TokenContract {
 
         spend_allowance(&env, &from, &spender, amount);
         burn_balance(&env, &from, amount);
-        env.events()
-            .publish((Symbol::new(&env, "burn"), from), amount);
+        
+        // Emit standardized burn event
+        EventEmitter::burn(&env, from, amount, env.current_contract_address());
     }
 
     pub fn decimals(env: Env) -> u32 {
@@ -110,10 +111,9 @@ impl TokenContract {
         let current_admin = storage::get_admin(&env);
         current_admin.require_auth();
         storage::set_admin(&env, &new_admin);
-        env.events().publish(
-            (Symbol::new(&env, "set_admin"), current_admin),
-            new_admin,
-        );
+        
+        // Emit standardized admin change event
+        EventEmitter::admin_changed(&env, current_admin, new_admin);
     }
 
     pub fn admin(env: Env) -> Address {
@@ -123,10 +123,9 @@ impl TokenContract {
     pub fn set_authorized(env: Env, id: Address, authorize: bool) {
         admin::require_admin(&env);
         storage::set_authorized(&env, &id, authorize);
-        env.events().publish(
-            (Symbol::new(&env, "set_authorized"), id),
-            authorize,
-        );
+        
+        // Emit standardized authorization change event
+        EventEmitter::authorization_changed(&env, id, authorize);
     }
 
     pub fn authorized(env: Env, id: Address) -> bool {
@@ -145,10 +144,8 @@ impl TokenContract {
         let new_supply = supply.checked_add(amount).expect("Overflow");
         storage::set_total_supply(&env, new_supply);
 
-        env.events().publish(
-            (Symbol::new(&env, "mint"), storage::get_admin(&env), to),
-            amount,
-        );
+        // Emit standardized mint event
+        EventEmitter::mint(&env, to, amount, env.current_contract_address(), Some("Token mint".to_string()));
     }
 
     pub fn clawback(env: Env, from: Address, amount: i128) {
@@ -156,10 +153,9 @@ impl TokenContract {
         ensure_nonnegative(amount);
 
         burn_balance(&env, &from, amount);
-        env.events().publish(
-            (Symbol::new(&env, "clawback"), storage::get_admin(&env), from),
-            amount,
-        );
+        
+        // Emit standardized burn event for clawback
+        EventEmitter::burn(&env, from, amount, env.current_contract_address());
     }
 
     // --------- Additional helpers ---------
@@ -234,8 +230,8 @@ fn internal_transfer(env: &Env, from: &Address, to: &Address, amount: i128) {
     storage::set_balance(env, from, &new_from);
     storage::set_balance(env, to, &new_to);
 
-    env.events()
-        .publish((Symbol::new(env, "transfer"), from, to), amount);
+    // Emit standardized transfer event
+    EventEmitter::transfer(&env, from, to, amount, env.current_contract_address());
 
     invoke_transfer_hook(env, from, to, amount);
 }

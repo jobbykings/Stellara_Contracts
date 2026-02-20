@@ -2,6 +2,7 @@ use soroban_sdk::{
     contract, contractimpl, contracttype, contracterror, Address, Env, String, Symbol, Vec,
     token, Map
 };
+use shared::events::EventEmitter;
 
 /// Staking position with variable rewards
 #[contracttype]
@@ -121,10 +122,8 @@ impl StakingContract {
         storage::set_staking_pool(&env, &pool);
         storage::set_emergency_mode(&env, false);
 
-        env.events().publish(
-            (Symbol::new(&env, "pool_initialized"), admin),
-            (reward_rate, bonus_multiplier),
-        );
+        // Emit standardized pool updated event
+        EventEmitter::pool_updated(&env, admin, reward_rate, bonus_multiplier);
 
         Ok(())
     }
@@ -201,11 +200,8 @@ impl StakingContract {
         // Store position
         storage::set_staking_position(&env, &user, &position);
 
-        // Emit event
-        env.events().publish(
-            (Symbol::new(&env, "staked"), user),
-            (amount, lock_period, reward_multiplier, env.ledger().timestamp()),
-        );
+        // Emit standardized staking event
+        EventEmitter::stake(&env, user, amount, lock_period, pool.token);
 
         Ok(())
     }
@@ -259,11 +255,8 @@ impl StakingContract {
         // Remove position
         storage::remove_staking_position(&env, &user);
 
-        // Emit event
-        env.events().publish(
-            (Symbol::new(&env, "unstaked"), user),
-            (position.amount, rewards.claimable_amount, fee, current_time),
-        );
+        // Emit standardized unstaking event
+        EventEmitter::unstake(&env, user, position.amount, rewards.claimable_amount, fee, pool.token);
 
         Ok(rewards.claimable_amount)
     }
@@ -301,11 +294,8 @@ impl StakingContract {
 
         storage::set_staking_position(&env, &user, &position);
 
-        // Emit event
-        env.events().publish(
-            (Symbol::new(&env, "rewards_claimed"), user),
-            (rewards.base_rewards, rewards.bonus_rewards, current_time),
-        );
+        // Emit standardized rewards claimed event
+        EventEmitter::rewards_claimed(&env, user, rewards.base_rewards, rewards.bonus_rewards, pool.token);
 
         Ok(rewards.claimable_amount)
     }
@@ -361,10 +351,8 @@ impl StakingContract {
 
         storage::set_staking_pool(&env, &pool);
 
-        env.events().publish(
-            (Symbol::new(&env, "pool_updated"), admin),
-            (pool.reward_rate, pool.bonus_multiplier, env.ledger().timestamp()),
-        );
+        // Emit standardized pool updated event
+        EventEmitter::pool_updated(&env, admin, pool.reward_rate, pool.bonus_multiplier);
 
         Ok(())
     }

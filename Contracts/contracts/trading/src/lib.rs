@@ -322,13 +322,8 @@ impl UpgradeableTradingContract {
         )?;
 
         // Emit fee collected event
-        EventEmitter::fee_collected(env, FeeCollectedEvent {
-            payer: request.trader.clone(),
-            recipient: request.fee_recipient.clone(),
-            amount: request.fee_amount,
-            token: request.fee_token.clone(),
-            timestamp: env.ledger().timestamp(),
-        });
+        EventEmitter::fee_collected(&env, request.trader.clone(), request.fee_recipient.clone(), 
+            request.fee_amount, request.fee_token.clone());
 
         // Create trade record with optimized storage
         let trade_id = stats.last_trade_id + 1;
@@ -351,18 +346,9 @@ impl UpgradeableTradingContract {
         // Store trade with optimized individual key
         TradingStorage::set_trade(env, &trade);
 
-        // Emit trade executed event with batch index
-        EventEmitter::trade_executed(env, TradeExecutedEvent {
-            trade_id,
-            trader: request.trader.clone(),
-            pair: request.pair.clone(),
-            amount: request.amount,
-            price: request.price,
-            is_buy: request.is_buy,
-            fee_amount: request.fee_amount,
-            fee_token: request.fee_token.clone(),
-            timestamp,
-        });
+        // Emit standardized trade executed event
+        EventEmitter::trade_executed(&env, request.trader.clone(), request.pair.clone(), 
+            request.amount, request.price, request.is_buy, request.fee_amount, request.fee_token.clone());
 
         Ok(trade_id)
     }

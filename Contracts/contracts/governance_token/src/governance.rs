@@ -3,6 +3,7 @@ use soroban_sdk::{
     token, Map, U256, u64, i128, u128
 };
 use shared::{admin, storage};
+use shared::events::EventEmitter;
 
 /// Governance token with voting power
 #[contracttype]
@@ -208,10 +209,8 @@ impl GovernanceToken {
         storage::set_governance_token(&env, &governance);
         storage::set_next_proposal_id(&env, 1);
 
-        env.events().publish(
-            (Symbol::new(&env, "governance_initialized"), admin),
-            (token, voting_power_multiplier, quorum_threshold, env.ledger().timestamp()),
-        );
+        // Emit standardized admin change event for initialization
+        EventEmitter::admin_changed(&env, admin, admin);
 
         Ok(())
     }
@@ -244,10 +243,8 @@ impl GovernanceToken {
         let voting_power = Self::calculate_voting_power(&env, amount, 0, &governance);
         storage::set_voting_power(&env, &recipient, &voting_power);
 
-        env.events().publish(
-            (Symbol::new(&env, "tokens_minted"), recipient),
-            (amount, reason, env.ledger().timestamp()),
-        );
+        // Emit standardized mint event
+        EventEmitter::mint(&env, recipient, amount, governance.token, Some(reason));
 
         Ok(())
     }
@@ -281,10 +278,8 @@ impl GovernanceToken {
         let token_client = token::Client::new(&env, &governance.token);
         token_client.transfer(&env.current_contract_address(), &burner, &amount);
 
-        env.events().publish(
-            (Symbol::new(&env, "tokens_burned"), burner),
-            (amount, env.ledger().timestamp()),
-        );
+        // Emit standardized burn event
+        EventEmitter::burn(&env, burner, amount, governance.token);
 
         Ok(())
     }
@@ -337,10 +332,15 @@ impl GovernanceToken {
         storage::set_proposal(&env, proposal_id, &proposal);
         storage::set_next_proposal_id(&env, proposal_id + 1);
 
-        env.events().publish(
-            (Symbol::new(&env, "proposal_created"), proposer),
-            (proposal_id, title, proposal_type, current_time),
-        );
+        // Emit standardized proposal created event
+        EventEmitter::proposal_created(&env, proposer, proposal_id, title.clone(), 
+            match proposal_type {
+                ProposalType::TokenTransfer => Symbol::new(&env, "TokenTransfer"),
+                ProposalType::ParameterChange => Symbol::new(&env, "ParameterChange"),
+                ProposalType::ContractUpgrade => Symbol::new(&env, "ContractUpgrade"),
+                ProposalType::EmergencyAction => Symbol::new(&env, "EmergencyAction"),
+                ProposalType::Custom => Symbol::new(&env, "Custom"),
+            });
 
         Ok(proposal_id)
     }
@@ -409,10 +409,13 @@ impl GovernanceToken {
 
         storage::set_proposal(&env, proposal_id, &proposal);
 
-        env.events().publish(
-            (Symbol::new(&env, "voted"), voter),
-            (proposal_id, vote_type, voting_power.voting_power, current_time),
-        );
+        // Emit standardized voting event
+        EventEmitter::vote(&env, voter, proposal_id, 
+            match vote_type {
+                VoteType::For => Symbol::new(&env, "For"),
+                VoteType::Against => Symbol::new(&env, "Against"),
+                VoteType::Abstain => Symbol::new(&env, "Abstain"),
+            }, voting_power.voting_power);
 
         Ok(())
     }
@@ -501,10 +504,8 @@ impl GovernanceToken {
         proposal.execution_time = Some(current_time);
         storage::set_proposal(&env, proposal_id, &proposal);
 
-        env.events().publish(
-            (Symbol::new(&env, "proposal_executed"), executor),
-            (proposal_id, success, current_time),
-        );
+        // Emit standardized proposal executed event
+        EventEmitter::proposal_executed(&env, executor, proposal_id, success);
 
         Ok(())
     }
